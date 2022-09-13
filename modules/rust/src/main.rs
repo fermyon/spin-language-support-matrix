@@ -1,7 +1,12 @@
 use anyhow::{anyhow, bail, Result};
 use clap::{Parser, Subcommand};
 use spin_http::{Request, Response};
-use std::{error, fmt};
+use std::{
+    env, error, fmt,
+    fs::{self, File},
+    io::{self, Seek, SeekFrom},
+    time::SystemTime,
+};
 
 wit_bindgen_rust::export!("../../wit/spin-http.wit");
 
@@ -67,7 +72,7 @@ impl fmt::Display for outbound_redis::Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
             Self::Success => "success",
-            Self::Error => "error",
+            Self::Error => "redis error",
         })
     }
 }
@@ -120,28 +125,6 @@ fn parse(param: &str) -> Result<outbound_pg::ParameterValue> {
     })
 }
 
-impl fmt::Display for outbound_pg::DbValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Boolean(value) => write!(f, "{value}"),
-            Self::Int8(value) => write!(f, "{value}"),
-            Self::Int16(value) => write!(f, "{value}"),
-            Self::Int32(value) => write!(f, "{value}"),
-            Self::Int64(value) => write!(f, "{value}"),
-            Self::Uint8(value) => write!(f, "{value}"),
-            Self::Uint16(value) => write!(f, "{value}"),
-            Self::Uint32(value) => write!(f, "{value}"),
-            Self::Uint64(value) => write!(f, "{value}"),
-            Self::Floating32(value) => write!(f, "{value}"),
-            Self::Floating64(value) => write!(f, "{value}"),
-            Self::Str(value) => write!(f, "{value}"),
-            Self::Binary(value) => write!(f, "{value:?}"),
-            Self::DbNull => Ok(()),
-            Self::Unsupported => write!(f, "<unsupported>"),
-        }
-    }
-}
-
 #[derive(Debug, Parser)]
 #[clap(author, version, about)]
 pub struct Cli {
@@ -185,30 +168,43 @@ enum Command {
         statement: String,
         params: Vec<String>,
     },
+    WasiEnv {
+        key: String,
+    },
+    WasiEpoch,
+    WasiRandom,
+    WasiStdio,
+    WasiRead {
+        file_name: String,
+    },
+    WasiSeek {
+        file_name: String,
+        offset: u64,
+    },
+    WasiReaddir {
+        dir_name: String,
+    },
+    WasiStat {
+        file_name: String,
+    },
 }
 
 fn main() -> Result<()> {
     match &Cli::parse().command {
         Command::Config { key } => {
-            print!("{}", spin_config::get_config(key)?);
+            spin_config::get_config(key)?;
         }
 
         Command::OutboundHttp { url } => {
             use wasi_outbound_http::{Method, Request};
 
-            print!(
-                "{}",
-                wasi_outbound_http::request(Request {
-                    method: Method::Get,
-                    uri: url,
-                    headers: &[],
-                    params: &[],
-                    body: None
-                })?
-                .body
-                .and_then(|body| String::from_utf8(body).ok())
-                .unwrap_or_else(String::new)
-            )
+            wasi_outbound_http::request(Request {
+                method: Method::Get,
+                uri: url,
+                headers: &[],
+                params: &[],
+                body: None,
+            })?;
         }
 
         Command::OutboundRedisPublish {
@@ -217,8 +213,6 @@ fn main() -> Result<()> {
             value,
         } => {
             outbound_redis::publish(address, key, value.as_bytes())?;
-
-            print!("success");
         }
 
         Command::OutboundRedisSet {
@@ -227,16 +221,14 @@ fn main() -> Result<()> {
             value,
         } => {
             outbound_redis::set(address, key, value.as_bytes())?;
-
-            print!("success");
         }
 
         Command::OutboundRedisGet { address, key } => {
-            print!("{}", String::from_utf8(outbound_redis::get(address, key)?)?);
+            outbound_redis::get(address, key)?;
         }
 
         Command::OutboundRedisIncr { address, key } => {
-            print!("{}", outbound_redis::incr(address, key)?);
+            outbound_redis::incr(address, key)?;
         }
 
         Command::OutboundPgExecute {
@@ -244,25 +236,7 @@ fn main() -> Result<()> {
             statement,
             params,
         } => {
-            print!(
-                "{}",
-                outbound_pg::execute(
-                    address,
-                    statement,
-                    &params
-                        .iter()
-                        .map(|param| parse(param))
-                        .collect::<Result<Vec<_>>>()?
-                )?
-            );
-        }
-
-        Command::OutboundPgQuery {
-            address,
-            statement,
-            params,
-        } => {
-            let row_set = outbound_pg::query(
+            outbound_pg::execute(
                 address,
                 statement,
                 &params
@@ -270,25 +244,80 @@ fn main() -> Result<()> {
                     .map(|param| parse(param))
                     .collect::<Result<Vec<_>>>()?,
             )?;
+        }
 
-            let mut newline = false;
-            for row in &row_set.rows {
-                if newline {
-                    println!();
+        Command::OutboundPgQuery {
+            address,
+            statement,
+            params,
+        } => {
+            outbound_pg::query(
+                address,
+                statement,
+                &params
+                    .iter()
+                    .map(|param| parse(param))
+                    .collect::<Result<Vec<_>>>()?,
+            )?;
+        }
+
+        Command::WasiEnv { key } => print!("{}", env::var(key)?),
+
+        Command::WasiEpoch => print!(
+            "{}",
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)?
+                .as_millis()
+        ),
+
+        Command::WasiRandom => {
+            let mut buffer = [0u8; 8];
+            getrandom::getrandom(&mut buffer).map_err(|_| anyhow!("getrandom error"))?;
+        }
+
+        Command::WasiStdio => {
+            io::copy(&mut io::stdin().lock(), &mut io::stdout().lock())?;
+        }
+
+        Command::WasiRead { file_name } => {
+            io::copy(&mut File::open(file_name)?, &mut io::stdout().lock())?;
+        }
+
+        Command::WasiSeek { file_name, offset } => {
+            let file = &mut File::open(file_name)?;
+            file.seek(SeekFrom::Start(*offset))?;
+            io::copy(file, &mut io::stdout().lock())?;
+        }
+
+        Command::WasiReaddir { dir_name } => {
+            let mut comma = false;
+            for entry in fs::read_dir(dir_name)? {
+                if comma {
+                    print!(",");
                 } else {
-                    newline = true;
+                    comma = true;
                 }
 
-                let mut comma = false;
-                for value in row {
-                    if comma {
-                        print!(",")
-                    } else {
-                        comma = true;
-                    }
-                    print!("{value}",);
-                }
+                print!(
+                    "{}",
+                    entry?
+                        .file_name()
+                        .to_str()
+                        .ok_or_else(|| anyhow!("non-UTF-8 file name"))?
+                );
             }
+        }
+
+        Command::WasiStat { file_name } => {
+            let metadata = fs::metadata(file_name)?;
+            print!(
+                "length:{},modified:{}",
+                metadata.len(),
+                metadata
+                    .modified()?
+                    .duration_since(SystemTime::UNIX_EPOCH)?
+                    .as_millis()
+            );
         }
     }
 
