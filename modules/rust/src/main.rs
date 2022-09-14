@@ -4,7 +4,7 @@ use spin_http::{Request, Response};
 use std::{
     env, error, fmt,
     fs::{self, File},
-    io::{self, Seek, SeekFrom},
+    io,
     time::SystemTime,
 };
 
@@ -177,10 +177,6 @@ enum Command {
     WasiRead {
         file_name: String,
     },
-    WasiSeek {
-        file_name: String,
-        offset: u64,
-    },
     WasiReaddir {
         dir_name: String,
     },
@@ -281,12 +277,6 @@ fn main() -> Result<()> {
 
         Command::WasiRead { file_name } => {
             io::copy(&mut File::open(file_name)?, &mut io::stdout().lock())?;
-        }
-
-        Command::WasiSeek { file_name, offset } => {
-            let file = &mut File::open(file_name)?;
-            file.seek(SeekFrom::Start(*offset))?;
-            io::copy(file, &mut io::stdout().lock())?;
         }
 
         Command::WasiReaddir { dir_name } => {
