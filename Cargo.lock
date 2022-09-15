@@ -1186,6 +1186,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "toml",
  "wasi-common",
  "wasmtime",
  "wasmtime-wasi",
@@ -1200,6 +1201,7 @@ dependencies = [
  "clap",
  "serde_json",
  "spin-conformance",
+ "toml",
  "wasmtime",
 ]
 

@@ -31,6 +31,13 @@ fn main() -> Result<()> {
                 .status()?;
 
             if status.success() {
+                let config =
+                    if let Ok(config) = fs::read_to_string(&path.join("spin-conformance.toml")) {
+                        toml::from_str(&config)?
+                    } else {
+                        spin_conformance::Config::default()
+                    };
+
                 matrix.insert(
                     path.file_name()
                         .ok_or_else(|| {
@@ -41,7 +48,10 @@ fn main() -> Result<()> {
                         })?
                         .to_string_lossy()
                         .into_owned(),
-                    spin_conformance::test(&Module::from_file(engine, &path.join("spin.wasm"))?)?,
+                    spin_conformance::test(
+                        &Module::from_file(engine, &path.join("spin.wasm"))?,
+                        config,
+                    )?,
                 );
             } else {
                 bail!("`make` command failed");
