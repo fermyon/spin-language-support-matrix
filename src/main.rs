@@ -9,8 +9,8 @@ pub struct Options {
     /// Directory to scan for modules.
     ///
     /// Each subdirectory of this directory will be assumed to contain a project with a makefile that produces a
-    /// file named "spin.wasm".  These files will be evaluated using `spin_conformance::test` to produce a matrix
-    /// of results.
+    /// file named "spin-conformance.wasm".  These files will be evaluated using `spin_conformance::test` to
+    /// produce a matrix of results.
     #[clap(default_value = "./modules")]
     pub module_directory: PathBuf,
 }
@@ -27,7 +27,7 @@ fn main() -> Result<()> {
         if path.is_dir() {
             let status = Command::new("make")
                 .current_dir(&path)
-                .args(["spin.wasm"])
+                .args(["spin-conformance.wasm"])
                 .status()?;
 
             if status.success() {
@@ -49,7 +49,7 @@ fn main() -> Result<()> {
                         .to_string_lossy()
                         .into_owned(),
                     spin_conformance::test(
-                        &Module::from_file(engine, &path.join("spin.wasm"))?,
+                        &Module::from_file(engine, &path.join("spin-conformance.wasm"))?,
                         config,
                     )?,
                 );
