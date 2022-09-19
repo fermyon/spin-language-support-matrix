@@ -1174,7 +1174,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
 
 [[package]]
-name = "spin-conformance"
+name = "spin-abi-conformance"
 version = "0.5.0"
 dependencies = [
  "anyhow",
@@ -1200,7 +1200,7 @@ dependencies = [
  "anyhow",
  "clap",
  "serde_json",
- "spin-conformance",
+ "spin-abi-conformance",
  "toml",
  "wasmtime",
 ]

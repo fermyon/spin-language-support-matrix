@@ -9,7 +9,7 @@ pub struct Options {
     /// Directory to scan for modules.
     ///
     /// Each subdirectory of this directory will be assumed to contain a project with a makefile that produces a
-    /// file named "spin-conformance.wasm".  These files will be evaluated using `spin_conformance::test` to
+    /// file named "spin-abi-conformance.wasm".  These files will be evaluated using `spin_abi_conformance::test` to
     /// produce a matrix of results.
     #[clap(default_value = "./modules")]
     pub module_directory: PathBuf,
@@ -27,16 +27,17 @@ fn main() -> Result<()> {
         if path.is_dir() {
             let status = Command::new("make")
                 .current_dir(&path)
-                .args(["spin-conformance.wasm"])
+                .args(["spin-abi-conformance.wasm"])
                 .status()?;
 
             if status.success() {
-                let config =
-                    if let Ok(config) = fs::read_to_string(&path.join("spin-conformance.toml")) {
-                        toml::from_str(&config)?
-                    } else {
-                        spin_conformance::Config::default()
-                    };
+                let config = if let Ok(config) =
+                    fs::read_to_string(&path.join("spin-abi-conformance.toml"))
+                {
+                    toml::from_str(&config)?
+                } else {
+                    spin_abi_conformance::Config::default()
+                };
 
                 matrix.insert(
                     path.file_name()
@@ -48,8 +49,8 @@ fn main() -> Result<()> {
                         })?
                         .to_string_lossy()
                         .into_owned(),
-                    spin_conformance::test(
-                        &Module::from_file(engine, &path.join("spin-conformance.wasm"))?,
+                    spin_abi_conformance::test(
+                        &Module::from_file(engine, &path.join("spin-abi-conformance.wasm"))?,
                         config,
                     )?,
                 );

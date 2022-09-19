@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use clap::{Parser, Subcommand};
-use spin_http::{Request, Response};
+use spin_http::{Method, Request, Response};
 use std::{
     env, error, fmt,
     fs::{self, File},
@@ -14,12 +14,32 @@ struct SpinHttp;
 
 impl spin_http::SpinHttp for SpinHttp {
     fn handle_http_request(request: Request) -> Response {
-        Response {
-            status: 200,
-            headers: Some(request.headers),
-            body: request
-                .body
-                .map(|body| b"you said: ".iter().copied().chain(body).collect()),
+        if request.method != Method::Post {
+            Response {
+                status: 405,
+                headers: None,
+                body: None,
+            }
+        } else if request.uri != "/foo" {
+            Response {
+                status: 404,
+                headers: None,
+                body: None,
+            }
+        } else if request.headers != &[("foo".into(), "bar".into())]
+            || request.body.as_deref() != Some(b"Hello, SpinHttp!")
+        {
+            Response {
+                status: 400,
+                headers: None,
+                body: None,
+            }
+        } else {
+            Response {
+                status: 200,
+                headers: Some(vec![("lorem".into(), "ipsum".into())]),
+                body: Some("dolor sit amet".as_bytes().to_owned()),
+            }
         }
     }
 }

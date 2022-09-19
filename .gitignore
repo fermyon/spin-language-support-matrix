@@ -1,3 +1,3 @@
 /target
 /modules/rust/target
-/modules/rust/spin-conformance.wasm
+/modules/rust/spin-abi-conformance.wasm

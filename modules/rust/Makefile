@@ -1,4 +1,4 @@
-spin-conformance.wasm: target/wasm32-wasi/release/spin-rust.wasm
+spin-abi-conformance.wasm: target/wasm32-wasi/release/spin-rust.wasm
 	cp $< $@
 
 target/wasm32-wasi/release/spin-rust.wasm: src/main.rs Cargo.toml
