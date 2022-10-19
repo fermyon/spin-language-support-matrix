@@ -178,6 +178,10 @@ enum Command {
         address: String,
         key: String,
     },
+    OutboundRedisDel {
+        address: String,
+        keys: Vec<String>,
+    },
     OutboundPgExecute {
         address: String,
         statement: String,
@@ -245,6 +249,13 @@ fn main() -> Result<()> {
 
         Command::OutboundRedisIncr { address, key } => {
             outbound_redis::incr(address, key)?;
+        }
+
+        Command::OutboundRedisDel { address, keys } => {
+            outbound_redis::del(
+                address,
+                &(keys.iter().map(|s| s.as_str()).collect::<Vec<&str>>()),
+            )?;
         }
 
         Command::OutboundPgExecute {
